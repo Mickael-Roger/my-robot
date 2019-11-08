@@ -1,9 +1,10 @@
 import RPi.GPIO as GPIO
-from time import sleep
+from time import sleep, time
 import signal
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 import cv2
+from pyzbar import pyzbar
 
 in1 = 11
 in2 = 12
@@ -21,35 +22,86 @@ IRderrieregauche = 36
 
 
 camera = PiCamera()
-face_cascade = cv2.CascadeClassifier()
-face_cascade.load(cv2.samples.findFile('../haarcascade_frontalface_alt.xml'))
 
 class image:
 
     def __init__(self):
         self.faces = []
+        face_cascade = cv2.CascadeClassifier()
+        face_cascade.load(cv2.samples.findFile('../haarcascade_frontalface_alt.xml'))
 
-    def afficher(self):
-        cv2.imshow("Image", self.image)
+    def afficher(self, image):
+        cv2.imshow("Image", image)
         cv2.waitKey(5000)
         cv2.destroyAllWindows()
 
     def capture(self):
         rawCapture = PiRGBArray(camera)
 
-        sleep(0.1)
+#        sleep(0.05)
 
+        camera.resolution = (683, 384)
         camera.capture(rawCapture, format="bgr")
-        self.image = rawCapture.array
+        return rawCapture.array
 
-        frame_gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+
+    def trouvervisages(self, image):
+
+        image = self.capture()
+
+        frame_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         frame_gray = cv2.equalizeHist(frame_gray)
-        self.faces = face_cascade.detectMultiScale(frame_gray)
+        self.faces = self.face_cascade.detectMultiScale(frame_gray)
+
+
 
         return self.faces
 
     def nombredevisage(self):
         return len(self.faces)
+
+
+    def positioncode(self, id):
+
+        image = self.capture()
+        barcodes = pyzbar.decode(image)
+
+        #self.afficher(image)
+        imgw = image.shape[1]
+        imgx = image.shape[0]
+
+        #print("Pos", imgx, imgw, sep=" ")
+
+
+        self.position = None
+
+        for barcode in barcodes:
+            (x, y, w, h) = barcode.rect
+            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+
+            barcodeData = barcode.data.decode("utf-8")
+            print("Code:", barcodeData)
+
+            if barcodeData == id:
+                imgw = image.shape[1]
+                pos = (x+w//2)/imgw
+
+                print("Pos", x, imgw, pos, sep=" ")
+
+                if pos > 0.45 and pos < 0.55:
+                    self.position = "milieu"
+
+                if pos <= 0.45:
+                    self.position = "gauche"
+
+                if pos >= 0.55:
+                    self.position = "droite"
+
+        return self.position
+
+
+
+
 
     def positionvisage(self):
 
